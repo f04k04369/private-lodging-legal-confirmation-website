@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>香川県民泊事業インタラクティブガイド</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Setouchi Calm -->
+    <!-- Application Structure Plan: 利用者の意思決定を支援する対話型ガイドとして設計。まず「住宅宿泊事業法」と「旅館業法」の二大選択肢を提示し、利用者の選択に応じて詳細情報を表示する。複雑な手続きはステップバイステップのフローチャート、必要書類はインタラクティブなチェックリスト、地域別要件はドロップダウン選択式で表示。これにより、利用者は自身の状況に合った情報へ迅速にアクセスでき、静的なレポートを読むよりも格段に理解しやすくなる。このタスク指向の構造が、実用性と使いやすさを最大化すると判断した。 -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: 営業日数の違い(180日/無制限)。 Goal: 比較。 Viz: ドーナツチャート。 Interaction: 視覚的な比較。 Justification: ２つの法律の最大の違いを瞬時に理解させるため。 Library: Chart.js。
+        - Report Info: 申請プロセス。 Goal: 整理。 Viz: HTML/CSSによるステップ式フロー図。 Interaction: ステップクリックで詳細表示。 Justification: 複雑な行政手続きを段階的で分かりやすいタスクに分解するため。 Library: Vanilla JS。
+        - Report Info: 必要書類一覧。 Goal: 整理・実行支援。 Viz: インタラクティブなチェックリスト。 Interaction: クリックで詳細展開、チェック可能。 Justification:膨大な書類リストを実用的なタスク管理ツールに変えるため。 Library: Vanilla JS。
+        - Report Info: 自治体ごとの特記事項。 Goal: 情報提供。 Viz: ドロップダウンメニュー。 Interaction: 市町選択で関連情報表示。 Justification: 利用者に関係のある情報のみを提示し、UIの煩雑化を防ぐため。 Library: Vanilla JS。
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            background-color: #fdfaf6;
+            font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            color: #4a4a4a;
+        }
+        .tab-button.active {
+            border-color: #008080;
+            background-color: #e6f2f2;
+            color: #005959;
+            font-weight: bold;
+        }
+        .content-box {
+            display: none;
+        }
+        .content-box.active {
+            display: block;
+        }
+        .process-step {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .process-step:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .document-item-header {
+            cursor: pointer;
+        }
+        .document-item-body {
+            display: none;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .document-item.open .document-item-body {
+            display: block;
+            max-height: 500px;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-bold text-teal-800">香川県 民泊事業インタラクティブガイド</h1>
+            <nav class="hidden md:flex space-x-6">
+                <a href="#decision" class="text-gray-600 hover:text-teal-700">事業選択</a>
+                <a href="#details" class="text-gray-600 hover:text-teal-700">手続き詳細</a>
+                <a href="#local" class="text-gray-600 hover:text-teal-700">地域別情報</a>
+                <a href="#contacts" class="text-gray-600 hover:text-teal-700">窓口一覧</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-8">
+
+        <section id="decision" class="text-center mb-16">
+            <h2 class="text-3xl font-bold mb-4 text-gray-800">はじめに：あなたの民泊事業はどのタイプ？</h2>
+            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-8">
+                香川県で民泊を始めるには、主に「住宅宿泊事業法（民泊新法）」と「旅館業法」の2つの方法があります。最大の違いは年間の営業日数です。あなたの事業計画に合った方を選び、詳細を確認しましょう。
+            </p>
+            <div class="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+                <div class="bg-white p-8 rounded-xl shadow-lg border-2 border-transparent hover:border-teal-500 transition-all cursor-pointer" onclick="showTab('minpaku-law')">
+                    <h3 class="text-2xl font-bold text-teal-700 mb-4">住宅宿泊事業法（民泊新法）</h3>
+                    <p class="text-5xl font-extrabold text-teal-600 mb-2">180日<span class="text-2xl font-normal">/年まで</span></p>
+                    <p class="text-gray-600 mb-6">週末や特定のシーズンだけなど、副業的に運営したい方向け。比較的始めやすいですが、営業日数に上限があります。</p>
+                    <button class="w-full bg-teal-600 text-white py-3 rounded-lg font-bold hover:bg-teal-700 transition">詳細を見る</button>
+                </div>
+                <div class="bg-white p-8 rounded-xl shadow-lg border-2 border-transparent hover:border-amber-500 transition-all cursor-pointer" onclick="showTab('ryokan-law')">
+                    <h3 class="text-2xl font-bold text-amber-700 mb-4">旅館業法（簡易宿所）</h3>
+                    <p class="text-5xl font-extrabold text-amber-600 mb-2">日数制限なし</p>
+                    <p class="text-gray-600 mb-6">年間を通じて本格的に宿泊事業を運営したい方向け。要件は厳しくなりますが、事業の自由度は高くなります。</p>
+                    <button class="w-full bg-amber-600 text-white py-3 rounded-lg font-bold hover:bg-amber-700 transition">詳細を見る</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="details" class="mb-16">
+            <div id="welcome-message" class="text-center py-12 bg-white rounded-xl shadow-md">
+                <h3 class="text-2xl font-bold text-gray-700">上のボタンから事業タイプを選択してください</h3>
+                <p class="text-gray-500 mt-2">選択すると、ここに詳細な手続き情報が表示されます。</p>
+            </div>
+            
+            <div id="content-container" class="hidden">
+                <div class="flex flex-wrap justify-center border-b-2 border-gray-200 mb-8">
+                    <button id="tab-button-minpaku-law" class="tab-button text-lg py-3 px-6 border-b-4 border-transparent" onclick="showTab('minpaku-law')">住宅宿泊事業法</button>
+                    <button id="tab-button-ryokan-law" class="tab-button text-lg py-3 px-6 border-b-4 border-transparent" onclick="showTab('ryokan-law')">旅館業法</button>
+                </div>
+                
+                <div id="content-minpaku-law" class="content-box">
+                    <div class="p-6 bg-white rounded-xl shadow-lg">
+                        <div class="grid md:grid-cols-3 gap-8">
+                            <div class="md:col-span-2">
+                                <h3 class="text-2xl font-bold text-teal-800 mb-4">住宅宿泊事業法（民泊新法）ガイド</h3>
+                                <p class="mb-6 text-gray-700">年間180日を上限として住宅に人を宿泊させる事業です。主にオンラインでの届出となり、比較的簡易な手続きで開始できますが、家主が不在の場合は管理業者への委託が必須となるなど、独自のルールがあります。</p>
+                                <div class="space-y-4">
+                                    <div class="bg-teal-50 p-4 rounded-lg"><strong>年間営業日数:</strong> 180日以内</div>
+                                    <div class="bg-teal-50 p-4 rounded-lg"><strong>手続き:</strong> 都道府県知事への「届出」</div>
+                                    <div class="bg-teal-50 p-4 rounded-lg"><strong>主な要件:</strong> 住宅の設備（台所、浴室、便所等）、家主不在時の管理委託</div>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="minpakuChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="mt-12">
+                            <h4 class="text-xl font-bold text-center mb-6 text-teal-800">届出までの手続きフロー</h4>
+                             <div class="flex flex-col md:flex-row justify-center items-stretch md:space-x-4 space-y-4 md:space-y-0 text-center">
+                                <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-teal-500" onclick="toggleDetail('proc-m-1')">
+                                    <span class="text-2xl font-bold text-teal-500">1</span><h5 class="font-bold mt-2">事前確認</h5>
+                                    <p id="proc-m-1" class="text-sm text-gray-600 hidden mt-2">管理規約や賃貸借契約で民泊が禁止されていないか確認します。消防署への事前相談もこの段階で行います。</p>
+                                </div>
+                                <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-teal-500" onclick="toggleDetail('proc-m-2')">
+                                    <span class="text-2xl font-bold text-teal-500">2</span><h5 class="font-bold mt-2">書類準備</h5>
+                                    <p id="proc-m-2" class="text-sm text-gray-600 hidden mt-2">消防法令適合通知書や登記事項証明書など、下のリストにある必要書類を揃えます。</p>
+                                </div>
+                                <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-teal-500" onclick="toggleDetail('proc-m-3')">
+                                    <span class="text-2xl font-bold text-teal-500">3</span><h5 class="font-bold mt-2">オンライン届出</h5>
+                                    <p id="proc-m-3" class="text-sm text-gray-600 hidden mt-2">「民泊制度運営システム」を通じてオンラインで届出を行います。香川県健康福祉部生活衛生課が窓口です。</p>
+                                </div>
+                                 <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-teal-500" onclick="toggleDetail('proc-m-4')">
+                                    <span class="text-2xl font-bold text-teal-500">4</span><h5 class="font-bold mt-2">事業開始</h5>
+                                    <p id="proc-m-4" class="text-sm text-gray-600 hidden mt-2">届出が受理されれば事業を開始できます。標識の掲示や宿泊者名簿の備え付けなどの義務を遵守します。</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-12">
+                            <h4 class="text-xl font-bold text-center mb-6 text-teal-800">必要書類チェックリスト</h4>
+                            <div id="minpaku-documents" class="space-y-2 max-w-4xl mx-auto"></div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div id="content-ryokan-law" class="content-box">
+                    <div class="p-6 bg-white rounded-xl shadow-lg">
+                        <div class="grid md:grid-cols-3 gap-8">
+                            <div class="md:col-span-2">
+                                <h3 class="text-2xl font-bold text-amber-800 mb-4">旅館業法（簡易宿所）ガイド</h3>
+                                <p class="mb-6 text-gray-700">営業日数に制限なく、本格的な宿泊事業として運営する形態です。保健所からの「許可」が必要で、施設の構造設備に関する基準が厳しく定められています。関係各所との綿密な事前相談が成功の鍵です。</p>
+                                <div class="space-y-4">
+                                    <div class="bg-amber-50 p-4 rounded-lg"><strong>年間営業日数:</strong> 制限なし</div>
+                                    <div class="bg-amber-50 p-4 rounded-lg"><strong>手続き:</strong> 管轄保健所からの「許可」</div>
+                                    <div class="bg-amber-50 p-4 rounded-lg"><strong>主な要件:</strong> 客室面積、換気・採光、衛生設備、消防設備など詳細な構造基準</div>
+                                </div>
+                            </div>
+                           <div class="chart-container">
+                                <canvas id="ryokanChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="mt-12">
+                            <h4 class="text-xl font-bold text-center mb-6 text-amber-800">許可取得までの手続きフロー</h4>
+                            <div class="flex flex-col md:flex-row justify-center items-stretch md:space-x-4 space-y-4 md:space-y-0 text-center">
+                                <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-amber-500" onclick="toggleDetail('proc-r-1')">
+                                    <span class="text-2xl font-bold text-amber-500">1</span><h5 class="font-bold mt-2">事前相談</h5>
+                                    <p id="proc-r-1" class="text-sm text-gray-600 hidden mt-2">計画段階で保健所、消防署、建築審査課に必ず相談します。施設の図面を持参するとスムーズです。</p>
+                                </div>
+                                <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-amber-500" onclick="toggleDetail('proc-r-2')">
+                                    <span class="text-2xl font-bold text-amber-500">2</span><h5 class="font-bold mt-2">許可申請</h5>
+                                    <p id="proc-r-2" class="text-sm text-gray-600 hidden mt-2">必要書類を揃え、管轄の保健所に申請します。申請手数料（22,000円）が必要です。</p>
+                                </div>
+                                <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-amber-500" onclick="toggleDetail('proc-r-3')">
+                                    <span class="text-2xl font-bold text-amber-500">3</span><h5 class="font-bold mt-2">施設検査</h5>
+                                    <p id="proc-r-3" class="text-sm text-gray-600 hidden mt-2">保健所の担当者が現地を訪れ、申請内容と実際の施設が基準に適合しているか検査します。</p>
+                                </div>
+                                <div class="process-step flex-1 bg-white p-4 rounded-lg shadow-md border-t-4 border-amber-500" onclick="toggleDetail('proc-r-4')">
+                                    <span class="text-2xl font-bold text-amber-500">4</span><h5 class="font-bold mt-2">許可・事業開始</h5>
+                                    <p id="proc-r-4" class="text-sm text-gray-600 hidden mt-2">検査に合格すると許可書が交付され、営業を開始できます。衛生管理や宿泊者名簿の管理義務があります。</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-12">
+                            <h4 class="text-xl font-bold text-center mb-6 text-amber-800">必要書類チェックリスト</h4>
+                            <div id="ryokan-documents" class="space-y-2 max-w-4xl mx-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="common-requirements" class="mb-16 p-8 bg-white rounded-xl shadow-lg">
+            <h3 class="text-2xl font-bold text-center mb-4 text-red-700">【最重要】全事業者に共通の要件：消防法令の遵守</h3>
+            <p class="max-w-3xl mx-auto text-center text-gray-600 mb-8">
+                どちらの事業形態を選ぶ場合でも、宿泊者の安全確保は最優先事項です。管轄の消防署から「消防法令適合通知書」を取得することが絶対に必要です。この通知書がなければ、民泊事業を始めることはできません。計画の初期段階で必ず消防署に相談してください。
+            </p>
+            <div class="flex justify-center">
+                 <a href="https://www.city.takamatsu.kagawa.jp/kurashi/bosai/shobo/shinsei/tekigoutuuti.html" target="_blank" class="bg-red-600 text-white py-3 px-8 rounded-lg font-bold hover:bg-red-700 transition">
+                    消防法令適合通知書の詳細（高松市の例）
+                </a>
+            </div>
+        </section>
+
+
+        <section id="local" class="mb-16">
+            <h2 class="text-3xl font-bold text-center mb-4 text-gray-800">地域別の特記事項</h2>
+            <p class="max-w-3xl mx-auto text-center text-gray-600 mb-8">
+                香川県内でも、市町によっては独自のルールが定められています。事業を行う場所の情報を確認しましょう。
+            </p>
+            <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+                <label for="city-select" class="block text-lg font-medium text-gray-700 mb-2">市町を選択してください:</label>
+                <select id="city-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-teal-500 focus:border-teal-500">
+                    <option value="default">---</option>
+                    <option value="kagawa-pref">香川県全域（共通）</option>
+                    <option value="takamatsu">高松市</option>
+                    <option value="marugame">丸亀市</option>
+                    <option value="other">その他の市町</option>
+                </select>
+                <div id="local-info-box" class="mt-6 p-6 bg-gray-50 rounded-lg min-h-[150px]">
+                    <p class="text-gray-500">選択すると、ここに地域別の情報が表示されます。</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="contacts" class="mb-16">
+            <h2 class="text-3xl font-bold text-center mb-4 text-gray-800">主な相談窓口</h2>
+             <p class="max-w-3xl mx-auto text-center text-gray-600 mb-8">
+                民泊事業に関する主な相談先は、物件の所在地を管轄する保健所です。高松市は独自の保健所を持っていますのでご注意ください。
+            </p>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="font-bold text-lg text-teal-800">東讃保健所</h4>
+                    <p class="text-sm text-gray-600">さぬき市、東かがわ市、三木町、直島町</p>
+                    <p class="mt-2 text-gray-800">📞 0879-29-8250</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="font-bold text-lg text-teal-800">小豆保健所</h4>
+                    <p class="text-sm text-gray-600">土庄町、小豆島町</p>
+                    <p class="mt-2 text-gray-800">📞 0879-62-1373</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="font-bold text-lg text-teal-800">中讃保健所</h4>
+                    <p class="text-sm text-gray-600">丸亀市、坂出市、善通寺市、宇多津町、綾川町、琴平町、多度津町、まんのう町</p>
+                    <p class="mt-2 text-gray-800">📞 0877-24-9960</p>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="font-bold text-lg text-teal-800">西讃保健所</h4>
+                    <p class="text-sm text-gray-600">観音寺市、三豊市</p>
+                    <p class="mt-2 text-gray-800">📞 0875-25-3082</p>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="font-bold text-lg text-amber-800">【高松市】高松市保健所</h4>
+                    <p class="text-sm text-gray-600">高松市</p>
+                    <p class="mt-2 text-gray-800">📞 087-839-2860 (生活衛生課)</p>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="font-bold text-lg text-red-800">【消防関係】高松市消防局</h4>
+                    <p class="text-sm text-gray-600">高松市</p>
+                    <p class="mt-2 text-gray-800">📞 087-861-1505 (予防課調査係)</p>
+                </div>
+            </div>
+        </section>
+        
+    </main>
+    
+    <footer class="bg-gray-800 text-white text-center p-6">
+        <p>&copy; 2025 香川県民泊事業インタラクティブガイド. このガイドは公開情報に基づき作成されていますが、最終的な判断は必ず管轄行政機関にご確認ください。</p>
+    </footer>
+
+    <script>
+        const data = {
+            minpakuDocs: [
+                { title: "住宅宿泊事業届出書", detail: "原則、民泊制度運営システムで作成します。" },
+                { title: "住宅の登記事項証明書", detail: "法務局で取得します。" },
+                { title: "住宅の図面", detail: "間取り、各設備の配置、床面積、非常用照明器具の位置などを明記します。手書きも可。" },
+                { title: "消防法令適合通知書", detail: "【最重要】管轄の消防署へ相談し、検査を受けた上で交付されます。これがないと届出できません。" },
+                { title: "欠格事由に該当しない誓約書", detail: "指定の様式があります。" },
+                { title: "【賃貸の場合】転貸承諾書", detail: "家主（賃貸人）から民泊営業を目的とした転貸の承諾を得ていることを証明する書類です。" },
+                { title: "【マンションの場合】管理規約の写し", detail: "民泊が禁止されていないか確認します。規約に定めがない場合は、管理組合に禁止の意思がないことの証明書が必要です。" },
+                { title: "【家主不在型の場合】管理受託契約に関する書面", detail: "住宅宿泊管理業者との契約書の写しです。" },
+                { title: "【法人の場合】定款、登記事項証明書など", detail: "法人の基本情報を証明する書類一式が必要です。" },
+                { title: "【個人の場合】身分証明書など", detail: "破産手続開始の決定を受けて復権を得ない者に該当しない旨の市町村長の証明書などが必要です。" }
+            ],
+            ryokanDocs: [
+                { title: "旅館業営業許可申請書", detail: "管轄保健所の様式を使用します。" },
+                { title: "営業施設の構造設備を明らかにする図面", detail: "各階平面図、詳細図、立面図など、詳細な図面が必要です。" },
+                { title: "付近見取図", detail: "施設の周囲200m以内の状況、特に学校などが100m以内にある場合はその距離を明記します。" },
+                { title: "消防法令適合通知書", detail: "【最重要】民泊新法と同様に必須です。要件がより厳しくなる場合があります。" },
+                { title: "建築基準法第7条第5項による検査済証の写し", detail: "建物の適法性を証明する重要な書類です。" },
+                { title: "【法人の場合】定款・登記事項証明書の写し", detail: "法人の存在と事業目的を証明します。" },
+                { title: "【水道水以外を利用する場合】水質検査成績書", detail: "井戸水などを利用する場合に必要です。" },
+                { title: "【土地建物が他人所有の場合】使用承諾書", detail: "所有者から旅館業を営むことへの同意を得ている証明です。" }
+            ],
+            localInfo: {
+                default: '<p class="text-gray-500">選択すると、ここに地域別の情報が表示されます。</p>',
+                "kagawa-pref": '<div><h4 class="font-bold text-lg mb-2">香川県全域（共通）</h4><p>香川県は、住宅宿泊事業法（民泊新法）に関して、営業日数を制限するような独自の条例は制定していません。ただし、どの市町で事業を行う場合でも、消防法、建築基準法など国の定める関係法令の遵守は必須です。</p></div>',
+                takamatsu: '<div><h4 class="font-bold text-lg mb-2">高松市の特記事項</h4><p>高松市は保健所設置市のため、<strong class="text-amber-700">旅館業法に基づく許可申請</strong>は、県の保健所ではなく<strong class="text-amber-700">高松市保健所</strong>が窓口となります。また、学校等の敷地から100m以内の区域では、施設の設置が制限される場合があります。住宅宿泊事業法の届出窓口は、他市町と同様に香川県です。</p></div>',
+                marugame: '<div><h4 class="font-bold text-lg mb-2">丸亀市の特記事項</h4><p><strong class="text-teal-700">住宅宿泊事業法（民泊新法）</strong>に関して、市独自の制限があります。小学校及び中学校の敷地の周囲100m以内の区域では、<strong class="text-red-600">月曜日の正午から金曜日の正午まで</strong>の、児童生徒が就学している時間帯は営業ができません。物件選定の際に特に注意が必要です。</p></div>',
+                other: '<div><h4 class="font-bold text-lg mb-2">その他の市町</h4><p>現在のところ、高松市・丸亀市以外で民泊事業に関する独自の条例を定めている市町はありません。ただし、今後の条例改正の可能性もあるため、事業開始前には必ず各市町の担当課にご確認ください。</p></div>'
+            }
+        };
+
+        function createDocumentList(containerId, docs) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = docs.map((doc, index) => `
+                <div class="document-item bg-gray-100 rounded-lg">
+                    <div class="document-item-header p-4 flex justify-between items-center" onclick="toggleDocumentItem(${index}, '${containerId}')">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 mr-4">
+                            <h5 class="font-semibold text-gray-800">${doc.title}</h5>
+                        </div>
+                        <span class="text-teal-600 transform transition-transform duration-300">▼</span>
+                    </div>
+                    <div class="document-item-body px-4 pb-4 ml-9 border-l-2 border-gray-200">
+                        <p class="text-gray-600">${doc.detail}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleDocumentItem(index, containerId) {
+            const container = document.getElementById(containerId);
+            const item = container.children[index];
+            const arrow = item.querySelector('.document-item-header span');
+            
+            if (item.classList.contains('open')) {
+                item.classList.remove('open');
+                arrow.style.transform = 'rotate(0deg)';
+            } else {
+                // Close other items
+                Array.from(container.children).forEach(child => {
+                    child.classList.remove('open');
+                    child.querySelector('.document-item-header span').style.transform = 'rotate(0deg)';
+                });
+                item.classList.add('open');
+                arrow.style.transform = 'rotate(180deg)';
+            }
+        }
+        
+        function toggleDetail(id) {
+            const el = document.getElementById(id);
+            el.classList.toggle('hidden');
+        }
+
+        function showTab(tabName) {
+            document.getElementById('welcome-message').style.display = 'none';
+            document.getElementById('content-container').style.display = 'block';
+
+            ['minpaku-law', 'ryokan-law'].forEach(name => {
+                document.getElementById(`content-${name}`).classList.remove('active');
+                document.getElementById(`tab-button-${name}`).classList.remove('active');
+            });
+
+            document.getElementById(`content-${tabName}`).classList.add('active');
+            document.getElementById(`tab-button-${tabName}`).classList.add('active');
+            
+            window.location.hash = 'details';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            createDocumentList('minpaku-documents', data.minpakuDocs);
+            createDocumentList('ryokan-documents', data.ryokanDocs);
+
+            const citySelect = document.getElementById('city-select');
+            const localInfoBox = document.getElementById('local-info-box');
+            citySelect.addEventListener('change', (event) => {
+                localInfoBox.innerHTML = data.localInfo[event.target.value];
+            });
+            
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            };
+            
+            new Chart(document.getElementById('minpakuChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['営業可能日数', '営業不可日数'],
+                    datasets: [{
+                        data: [180, 365 - 180],
+                        backgroundColor: ['#008080', '#e0e0e0'],
+                        borderColor: ['#008080', '#e0e0e0'],
+                        borderWidth: 1
+                    }]
+                },
+                options: chartOptions
+            });
+
+            new Chart(document.getElementById('ryokanChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['営業可能日数'],
+                    datasets: [{
+                        data: [365],
+                        backgroundColor: ['#d97706'],
+                        borderColor: ['#d97706'],
+                        borderWidth: 1
+                    }]
+                },
+                options: chartOptions
+            });
+
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+        });
+    </script>
+</body>
+</html>
